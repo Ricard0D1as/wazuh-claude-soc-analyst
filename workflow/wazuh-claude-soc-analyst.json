@@ -1,0 +1,282 @@
+{
+  "name": "Wazuh Claude SOC Analyst",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh-claude-alert",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -928,
+        -32
+      ],
+      "id": "55bf84f5-a079-4c54-83c6-c02727774016",
+      "name": "Webhook",
+      "webhookId": "878d0944-2baf-42e0-bbdd-dd039bfa3fdc"
+    },
+    {
+      "parameters": {
+        "url": "https://api.abuseipdb.com/api/v2/check",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{ $json.body.src_ip }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Key",
+              "value": "dd7eb35bb65988af71d87cb08d986057d61bff620b7494ba60cfe361c1743c4255e4205e11ea237e"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -720,
+        -32
+      ],
+      "id": "31315ebb-16eb-4e50-8f4c-12f8060bc1f8",
+      "name": "AbuseIPDB Enrichment",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $('Webhook').item.json.body.src_ip }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "eed7d55dcea50c1606a6ea04329961dbe56b44c51a4b3f7819440ec3889fc46d"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -512,
+        -32
+      ],
+      "id": "face3fa9-81c4-4a89-a20f-bd8b07e4950d",
+      "name": "VirusTotal Enrichment",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "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"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are a SOC analyst. Analyze this security alert and respond ONLY with a valid JSON object (no markdown, no backticks) with exactly these fields: analysis (string), severity (one of: LOW, MEDIUM, HIGH, CRITICAL), recommendation (string).\\n\\nAlert data:\\n- Rule: {{ $('Webhook').item.json.body.rule_desc }}\\n- Source IP: {{ $('Webhook').item.json.body.src_ip }}\\n- Agent: {{ $('Webhook').item.json.body.agent_name }}\\n- Timestamp: {{ $('Webhook').item.json.body.timestamp }}\\n- AbuseIPDB Score: {{ $('AbuseIPDB Enrichment').item.json.data.abuseConfidenceScore }}%\\n- AbuseIPDB Total Reports: {{ $('AbuseIPDB Enrichment').item.json.data.totalReports }}\\n- AbuseIPDB Country: {{ $('AbuseIPDB Enrichment').item.json.data.countryCode }}\\n- AbuseIPDB ISP: {{ $('AbuseIPDB Enrichment').item.json.data.isp }}\\n- VirusTotal Malicious Votes: {{ $('VirusTotal Enrichment').item.json.data.attributes.total_votes.malicious }}\\n- VirusTotal Harmless Votes: {{ $('VirusTotal Enrichment').item.json.data.attributes.total_votes.harmless }}\\n- VirusTotal Tags: {{ $('VirusTotal Enrichment').item.json.data.attributes.tags }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -304,
+        -32
+      ],
+      "id": "a084e9ba-9d98-4f11-8966-c6f6fccd2de8",
+      "name": "Claude AI Analysis",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the raw response from Claude API\nconst response = $input.item.json;\n\n// Extract the text content from Claude's response\nlet rawText = response.content[0].text;\n\n// Strip markdown code blocks if present\n// Handles ```json ... ``` and ``` ... ``` patterns\nrawText = rawText.replace(/```json\\n?/gi, '').replace(/```\\n?/gi, '').trim();\n\n// Parse the JSON response from Claude\ntry {\n  const parsed = JSON.parse(rawText);\n  return {\n    analysis: parsed.analysis || \"Analysis unavailable\",\n    severity: parsed.severity || \"UNKNOWN\",\n    recommendation: parsed.recommendation || \"No recommendation available\",\n    raw_response: rawText\n  };\n} catch (e) {\n  // If parsing fails, return raw text with default severity\n  return {\n    analysis: rawText,\n    severity: \"UNKNOWN\",\n    recommendation: \"Manual review required\",\n    raw_response: rawText\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -32
+      ],
+      "id": "c55c76b0-b378-44ee-a886-0f70e155da0b",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d7cb1111-a77d-4b0a-bc95-e581cb3a92fd",
+              "leftValue": "={{ $('Parse AI Response').item.json.severity }}",
+              "rightValue": "LOW",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        112,
+        -32
+      ],
+      "id": "7a376570-0aa7-4ef7-b4ed-e3e2105c51c9",
+      "name": "Threat Filter"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1493635412365807757/oqUnxiDhRaAPM-0EmmUqJzjSxm6QD2FFwgIxyUIizxZ_Loj8AtGhpOo1UL982OSeHZU4",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"embeds\": [{\n    \"title\": \"🚨 Wazuh Security Alert\",\n    \"color\": 15158332,\n    \"fields\": [\n      {\n        \"name\": \"📋 Rule\",\n        \"value\": \"{{ $('Webhook').item.json.body.rule_desc }}\",\n        \"inline\": false\n      },\n      {\n        \"name\": \"🌐 Source IP\",\n        \"value\": \"{{ $('Webhook').item.json.body.src_ip }}\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"⚠️ Abuse Score\",\n        \"value\": \"{{ $('AbuseIPDB Enrichment').item.json.data.abuseConfidenceScore }}%\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"🦠 VT Malicious Votes\",\n        \"value\": \"{{ $('VirusTotal Enrichment').item.json.data.attributes.total_votes.malicious }}\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"🤖 AI Severity\",\n        \"value\": \"{{ $('Parse AI Response').item.json.severity }}\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"🎯 Recommendation\",\n        \"value\": \"{{ $('Parse AI Response').item.json.recommendation }}\",\n        \"inline\": false\n      },\n      {\n        \"name\": \"🧠 AI Analysis\",\n        \"value\": \"{{ $('Parse AI Response').item.json.analysis }}\",\n        \"inline\": false\n      },\n      {\n        \"name\": \"🖥️ Agent\",\n        \"value\": \"{{ $('Webhook').item.json.body.agent_name }}\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"🕐 Timestamp\",\n        \"value\": \"{{ $('Webhook').item.json.body.timestamp }}\",\n        \"inline\": true\n      }\n    ],\n    \"footer\": {\n      \"text\": \"Wazuh + Claude AI SOC Analyst | n8n Automation\"\n    }\n  }]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        320,
+        -128
+      ],
+      "id": "c9fa8805-882b-4d51-b4ef-cdd939783121",
+      "name": "Discord Notification"
+    },
+    {
+      "parameters": {
+        "jsCode": "const alert = $('Webhook').item.json.body;\nconst severity = $('Parse AI Response').item.json.severity;\n\nconsole.log(`[IGNORED] ${alert.timestamp} | Severity: ${severity} | Rule: ${alert.rule_id} | IP: ${alert.src_ip} | Agent: ${alert.agent_name}`);\n\nreturn {\n  status: \"ignored\",\n  severity: severity,\n  reason: \"below_severity_threshold\",\n  rule_id: alert.rule_id,\n  src_ip: alert.src_ip,\n  agent_name: alert.agent_name,\n  timestamp: alert.timestamp\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        64
+      ],
+      "id": "c204e359-9d24-4a47-903a-c22e1d80b064",
+      "name": "Log Ignored Alert"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AbuseIPDB Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AbuseIPDB Enrichment": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Claude AI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude AI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Threat Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Threat Filter": {
+      "main": [
+        [
+          {
+            "node": "Discord Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Ignored Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c4d5ff45-e73b-480f-b5ca-d52470213735",
+  "meta": {
+    "instanceId": "55d000f7a013a825aa3f6c1408b1c4b35a70910fc51665b15581f1b89ad6de38"
+  },
+  "id": "TJy1sV5DTUVGexZ9",
+  "tags": []
+}
