@@ -2,7 +2,7 @@
 
 AI-powered SOC workflow: Wazuh FIM alerts → IP enrichment (AbuseIPDB + VirusTotal) → Claude AI triage analysis → Discord notification.
 
-Built as a portfolio project expanding the [wazuh-n8n-soar](https://github.com/YOUR_USERNAME/wazuh-n8n-soar) lab with AI-driven alert analysis.
+Built as a portfolio project expanding the [wazuh-n8n-soar](https://github.com/Ricard0D1as/wazuh-n8n-soar) lab with AI-driven alert analysis.
 
 ---
 
@@ -155,7 +155,7 @@ The $5 free Anthropic API credits cover approximately 12,000 alert analyses.
 
 ## Related Projects
 
-- [wazuh-n8n-soar](https://github.com/YOUR_USERNAME/wazuh-n8n-soar) — Base SOAR pipeline this project extends
+- [wazuh-n8n-soar](https://github.com/Ricard0D1as/wazuh-n8n-soar) — Base SOAR pipeline this project extends
 
 ---
 
